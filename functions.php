@@ -29,15 +29,27 @@ function get_questions($filename) {
                 return $text; // Fallback
             }, $data);
 
-            if (count($row) >= 5) {
+            // Support variable options (Question, Opt1, Opt2, [Opt3...], Correct)
+            // Minimum 4 columns: Question, A, B, Correct
+            if (count($row) >= 4) {
+                $question_text = $row[0];
+                $correct_answer = trim(end($row));
+                
+                // Extract options (from index 1 to second to last)
+                $options_data = array_slice($row, 1, -1);
+                $options = [];
+                $keys = range('A', 'Z'); // A, B, C, D, E...
+                
+                foreach ($options_data as $index => $opt) {
+                    if (isset($keys[$index])) {
+                        $options[$keys[$index]] = $opt;
+                    }
+                }
+
                 $questions[] = [
-                    'question' => $row[0],
-                    'options' => [
-                        'A' => $row[1],
-                        'B' => $row[2],
-                        'C' => $row[3]
-                    ],
-                    'correct' => trim($row[4])
+                    'question' => $question_text,
+                    'options' => $options,
+                    'correct' => $correct_answer
                 ];
             }
         }
@@ -46,39 +58,61 @@ function get_questions($filename) {
     return $questions;
 }
 
+require_once 'db.php';
+
 function get_progress() {
-    $filename = 'progress.json';
-    if (file_exists($filename)) {
-        $json = file_get_contents($filename);
-        return json_decode($json, true) ?? [];
+    if (!isset($_SESSION['user_id'])) {
+        return [];
     }
-    return [];
+    
+    try {
+        $pdo = get_db_connection();
+        $stmt = $pdo->prepare("SELECT question_hash, attempts, correct_count, wrong_count, last_result FROM progress WHERE user_id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        
+        $progress = [];
+        while ($row = $stmt->fetch()) {
+            $progress[$row['question_hash']] = [
+                'attempts' => $row['attempts'],
+                'correct' => $row['correct_count'],
+                'wrong' => $row['wrong_count'],
+                'last_result' => $row['last_result']
+            ];
+        }
+        return $progress;
+    } catch (PDOException $e) {
+        return [];
+    }
 }
 
 function save_progress($question_text, $is_correct) {
-    $progress = get_progress();
-    $key = md5($question_text); // Use hash as key to avoid issues with special chars
-    
-    if (!isset($progress[$key])) {
-        $progress[$key] = [
-            'text' => $question_text, // Store text for debugging/reference
-            'attempts' => 0,
-            'correct' => 0,
-            'wrong' => 0,
-            'last_result' => null
-        ];
+    if (!isset($_SESSION['user_id'])) {
+        return;
     }
     
-    $progress[$key]['attempts']++;
-    if ($is_correct) {
-        $progress[$key]['correct']++;
-        $progress[$key]['last_result'] = 'correct';
-    } else {
-        $progress[$key]['wrong']++;
-        $progress[$key]['last_result'] = 'wrong';
-    }
+    $key = md5($question_text);
+    $last_result = $is_correct ? 'correct' : 'wrong';
+    $correct_inc = $is_correct ? 1 : 0;
+    $wrong_inc = $is_correct ? 0 : 1;
     
-    file_put_contents('progress.json', json_encode($progress, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    try {
+        $pdo = get_db_connection();
+        $sql = "INSERT INTO progress (user_id, question_hash, attempts, correct_count, wrong_count, last_result) 
+                VALUES (?, ?, 1, ?, ?, ?) 
+                ON DUPLICATE KEY UPDATE 
+                attempts = attempts + 1, 
+                correct_count = correct_count + ?, 
+                wrong_count = wrong_count + ?, 
+                last_result = ?";
+                
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            $_SESSION['user_id'], $key, $correct_inc, $wrong_inc, $last_result,
+            $correct_inc, $wrong_inc, $last_result
+        ]);
+    } catch (PDOException $e) {
+        // Silently fail or log error
+    }
 }
 
 function get_weighted_questions($all_questions, $count) {
@@ -126,5 +160,19 @@ function get_weighted_questions($all_questions, $count) {
     shuffle($selected);
     
     return $selected;
+}
+
+function send_invitation_email($recipient_email, $test_name, $inviter_name) {
+    $subject = "Invitation to take a quiz: " . $test_name;
+    $link = "https://app2.performancetuning.cz/index.php"; // Assuming this is the base URL
+    $message = "Hello,\n\n" . 
+               $inviter_name . " has invited you to take the quiz '" . $test_name . "'.\n\n" .
+               "Please log in to accept the invitation and start the quiz:\n" . $link . "\n\n" .
+               "Best regards,\nKuizio Team";
+    $headers = "From: no-reply@quizio.cz\r\n" .
+               "Reply-To: no-reply@quizio.cz\r\n" .
+               "X-Mailer: PHP/" . phpversion();
+
+    return mail($recipient_email, $subject, $message, $headers);
 }
 ?>

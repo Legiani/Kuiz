@@ -2,18 +2,36 @@
 require_once 'auth.php';
 session_start();
 require_once 'functions.php';
+require_once 'db.php';
 
-// Initialize Quiz
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['num_questions'])) {
-    $all_questions = get_questions('out.csv');
-    $num_questions = min((int)$_POST['num_questions'], count($all_questions));
+// Initialize or reset quiz
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['count'])) {
+    $_SESSION['quiz_questions'] = [];
+    $_SESSION['current_question_index'] = 0;
+    $_SESSION['score'] = 0;
+    $_SESSION['answers'] = [];
     
-    // Use weighted selection to prioritize unseen and wrong answers
-    $selected_questions = get_weighted_questions($all_questions, $num_questions);
+    $test_id = $_POST['test_id'] ?? 1; // Default to ID 1
+    $_SESSION['test_id'] = $test_id;
     
-    $_SESSION['questions'] = $selected_questions;
-    $_SESSION['current_index'] = 0;
-    $_SESSION['answers'] = array_fill(0, $num_questions, null);
+    // Fetch filename from DB
+    $pdo = get_db_connection();
+    $stmt = $pdo->prepare("SELECT filename FROM tests WHERE id = ?");
+    $stmt->execute([$test_id]);
+    $test = $stmt->fetch();
+    $filename = $test ? 'tests/' . $test['filename'] : 'tests/out.csv';
+    
+    $all_questions = get_questions($filename);
+    
+    if ($_POST['count'] === 'all') {
+        $_SESSION['quiz_questions'] = $all_questions;
+        $_SESSION['answers'] = array_fill(0, count($all_questions), null); // Initialize answers for all questions
+    } else {
+        $count = (int)$_POST['count'];
+        $selected_questions = get_weighted_questions($all_questions, $count);
+        $_SESSION['quiz_questions'] = $selected_questions;
+        $_SESSION['answers'] = array_fill(0, count($selected_questions), null); // Initialize answers for selected questions
+    }
     
     header("Location: quiz.php");
     exit;
@@ -21,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['num_questions'])) {
 
 // Handle Navigation and Answer Saving
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    $current_index = $_SESSION['current_index'];
+    $current_index = $_SESSION['current_question_index'];
     
     // Save answer if provided
     if (isset($_POST['answer'])) {
@@ -29,12 +47,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 
     if ($_POST['action'] === 'next') {
-        if ($current_index < count($_SESSION['questions']) - 1) {
-            $_SESSION['current_index']++;
+        if ($current_index < count($_SESSION['quiz_questions']) - 1) {
+            $_SESSION['current_question_index']++;
         }
     } elseif ($_POST['action'] === 'prev') {
         if ($current_index > 0) {
-            $_SESSION['current_index']--;
+            $_SESSION['current_question_index']--;
         }
     } elseif ($_POST['action'] === 'finish') {
         header("Location: result.php");
@@ -46,14 +64,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 // Redirect if no session
-if (!isset($_SESSION['questions'])) {
+if (!isset($_SESSION['quiz_questions'])) {
     header("Location: index.php");
     exit;
 }
 
-$current_index = $_SESSION['current_index'];
-$question = $_SESSION['questions'][$current_index];
-$total_questions = count($_SESSION['questions']);
+$current_index = $_SESSION['current_question_index'];
+$question = $_SESSION['quiz_questions'][$current_index];
+$total_questions = count($_SESSION['quiz_questions']);
 $current_answer = $_SESSION['answers'][$current_index];
 
 ?>
@@ -62,7 +80,7 @@ $current_answer = $_SESSION['answers'][$current_index];
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mamon Quiz - Question <?php echo $current_index + 1; ?></title>
+    <title>Kuizio - Question <?php echo $current_index + 1; ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
 </head>

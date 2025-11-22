@@ -3,12 +3,12 @@ require_once 'auth.php';
 session_start();
 require_once 'functions.php';
 
-if (!isset($_SESSION['questions']) || !isset($_SESSION['answers'])) {
+if (!isset($_SESSION['quiz_questions']) || !isset($_SESSION['answers'])) {
     header("Location: index.php");
     exit;
 }
 
-$questions = $_SESSION['questions'];
+$questions = $_SESSION['quiz_questions'];
 $answers = $_SESSION['answers'];
 $score = 0;
 $total = count($questions);
@@ -19,7 +19,7 @@ $total = count($questions);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mamon Quiz - Results</title>
+    <title>Kuizio - Results</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
 </head>
@@ -52,17 +52,21 @@ $total = count($questions);
                                     save_progress($q['question'], $is_correct);
                                     
                                     $row_class = $is_correct ? 'table-success' : 'table-danger';
-                                    
-                                    $user_ans_text = $user_ans_key ? $q['options'][$user_ans_key] : '<span class="text-muted">No Answer</span>';
-                                    $correct_ans_text = $q['options'][$correct_key];
                                 ?>
                                 <tr class="<?php echo $row_class; ?>">
                                     <td><?php echo $index + 1; ?></td>
                                     <td><?php echo htmlspecialchars($q['question']); ?></td>
                                     <td>
                                         <ul class="list-unstyled mb-0 small">
-                                            <?php foreach ($q['options'] as $key => $val): ?>
-                                                <li class="<?php echo ($key === $q['correct']) ? 'text-success fw-bold' : ''; ?>">
+                                            <?php foreach ($q['options'] as $key => $val): 
+                                                $class = '';
+                                                if ($key === $correct_key) {
+                                                    $class = 'text-success fw-bold';
+                                                } elseif ($key === $user_ans_key && !$is_correct) {
+                                                    $class = 'text-danger fw-bold';
+                                                }
+                                            ?>
+                                                <li class="<?php echo $class; ?>">
                                                     <strong><?php echo $key; ?>:</strong> <?php echo htmlspecialchars($val); ?>
                                                 </li>
                                             <?php endforeach; ?>

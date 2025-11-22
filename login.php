@@ -1,26 +1,14 @@
 <?php
 session_start();
 
-$error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $password = $_POST['password'] ?? '';
-    
-    if ($password === 'Kreslo') {
-        $_SESSION['logged_in'] = true;
-        header("Location: index.php");
-        exit;
-    } else {
-        $error = 'Incorrect password';
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Mamon Quiz</title>
+    <title>Login - Kuizio</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
@@ -45,16 +33,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php if ($error): ?>
             <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
         <?php endif; ?>
-        
-        <form method="POST">
-            <div class="mb-3">
-                <label for="password" class="form-label">Password</label>
-                <input type="password" class="form-control" id="password" name="password" required autofocus>
+
+<?php
+require_once 'config.php';
+$config = require 'config.php';
+?>
+        <!-- Google Sign-In Configuration -->
+        <div id="g_id_onload"
+             data-client_id="<?php echo htmlspecialchars($config['google_client_id']); ?>"
+             data-context="signin"
+             data-ux_mode="popup"
+             data-login_uri="<?php echo htmlspecialchars($config['google_login_uri']); ?>"
+             data-auto_prompt="false">
+        </div>
+
+        <div class="d-flex justify-content-center">
+            <div class="g_id_signin"
+                 data-type="standard"
+                 data-shape="rectangular"
+                 data-theme="outline"
+                 data-text="signin_with"
+                 data-size="large"
+                 data-logo_alignment="left">
             </div>
-            <div class="d-grid">
-                <button type="submit" class="btn btn-primary">Login</button>
-            </div>
-        </form>
+        </div>
+
+        <div class="text-center my-3">
+            <p class="text-muted">Please sign in to continue.</p>
+        </div>
     </div>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </body>
 </html>
