@@ -30,7 +30,7 @@ session_start();
     <div class="card p-4">
         <h2 class="text-center mb-4">Login Required</h2>
         
-        <?php if ($error): ?>
+        <?php if (!empty($error)): ?>
             <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
         <?php endif; ?>
 
